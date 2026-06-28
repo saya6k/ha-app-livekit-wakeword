@@ -18,9 +18,14 @@ bundles the **byte-identical frozen frontend** as openWakeWord
 (hey_jarvis scored 0.995 here vs 0.998 in the oWW lib). That turns the
 "single pretrained model" weakness into the oWW zoo + livekit + custom.
 
-## Git / repo tracking
+## Repo structure
 
-Tracked in git (`stage: experimental` in `config.yaml` controls HA store display only — it does not affect git tracking). Release-please is configured for this slug; commits on `main` scoped `livekit-wakeword` will generate CHANGELOG entries and version bumps.
+Standalone repo — source, CI, and releases live here.
+`ha-apps` references the published GHCR image via `image: ghcr.io/saya6k/app-livekit-wakeword`.
+
+`stage: experimental` in `config.yaml` controls HA store display only.
+
+Release flow: push to `main` → release-drafter drafts the next patch version → publish the draft → `build.yml` pushes multi-arch GHCR images → `repository_dispatch` to ha-apps auto-updates `config.yaml`.
 
 ## Layout
 

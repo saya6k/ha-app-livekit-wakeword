@@ -1,0 +1,58 @@
+---
+name: Upstream check
+
+# yamllint disable-line rule:truthy
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check:
+    name: Check livekit/livekit-wakeword
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Get latest commit
+        id: upstream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHA=$(gh api repos/livekit/livekit-wakeword/commits/main --jq .sha)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Latest: $SHA"
+
+      - name: Open PR if changed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LATEST: ${{ steps.upstream.outputs.sha }}
+        run: |
+          set -euo pipefail
+          CONST=livekit-wakeword/wyoming_livekit_wakeword/const.py
+          CURRENT=$(grep '_LK_REF = ' "$CONST" | grep -oE '[0-9a-f]{40}')
+          echo "Current: $CURRENT"
+          echo "Latest : $LATEST"
+          [ "$LATEST" = "$CURRENT" ] && echo "Up to date." && exit 0
+
+          BRANCH="upstream/livekit-wakeword-$(date +%Y%m%d)"
+          gh pr list --head "$BRANCH" --json number --jq 'length' \
+            | grep -qv '^0$' && echo "PR already open." && exit 0
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          sed -i "s|_LK_REF = \"[0-9a-f]*\"|_LK_REF = \"${LATEST}\"|" "$CONST"
+          git add "$CONST"
+          git commit -m "chore: bump livekit-wakeword ${CURRENT:0:12} → ${LATEST:0:12}"
+          git push origin "$BRANCH"
+          COMPARE="https://github.com/livekit/livekit-wakeword/compare/${CURRENT:0:12}...${LATEST:0:12}"
+          gh pr create \
+            --base main --head "$BRANCH" \
+            --title "chore: bump livekit-wakeword ${CURRENT:0:12} → ${LATEST:0:12}" \
+            --body "$(printf '## Upstream update\n\nlivekit/livekit-wakeword: [%s...%s](%s)' "${CURRENT:0:12}" "${LATEST:0:12}" "$COMPARE")" \
+            --assignee saya6k

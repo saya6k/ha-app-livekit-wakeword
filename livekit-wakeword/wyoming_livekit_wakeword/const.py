@@ -22,7 +22,7 @@ DEFAULT_CUSTOM_DIR = "/share/livekit-wakeword"
 # its repo (no registry/release asset); openWakeWord's zoo lives in its GitHub
 # release. Both runtimes share the byte-identical frozen frontend, so oWW
 # classifiers run unmodified here (verified, see AGENTS.md).
-_LK_REF = "431c7e4376bd660180cf4a3adf1d95befc8eb57a"
+_LK_REF = "60b5d755ee0835bd184cbb1f05063944a9bed121"
 _OWW_RELEASE = "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1"
 
 

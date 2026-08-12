@@ -39,14 +39,44 @@ jobs:
           echo "Latest : $LATEST"
           [ "$LATEST" = "$CURRENT" ] && echo "Up to date." && exit 0
 
-          BRANCH="upstream/livekit-wakeword-$(date +%Y%m%d)"
-          gh pr list --head "$BRANCH" --json number --jq 'length' \
-            | grep -qv '^0$' && echo "PR already open." && exit 0
+          # Name the branch after the target commit, not the run date, so a
+          # weekly re-run for the same upstream commit hits the guard below
+          # instead of opening a duplicate PR on a fresh dated branch.
+          BRANCH="upstream/livekit-wakeword-${LATEST:0:12}"
+          if [ -n "$(gh pr list --state open --head "$BRANCH" --json number --jq '.[].number')" ]; then
+            echo "PR already open for $LATEST."
+            exit 0
+          fi
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "Branch $BRANCH exists but no PR is open — bump was declined."
+            exit 0
+          fi
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git switch -c "$BRANCH"
           sed -i "s|_LK_REF = \"[0-9a-f]*\"|_LK_REF = \"${LATEST}\"|" "$CONST"
+
+          # The ref bump changes hey_livekit's download URL, so its pinned
+          # sha256 has to be re-checked: a silently stale hash ships a PR that
+          # fails the runtime download instead of failing here.
+          python3 - "$CONST" > /tmp/model_info.sh <<'PY'
+          import runpy, sys
+          spec = runpy.run_path(sys.argv[1])["KNOWN_MODELS"]["hey_livekit"]
+          print(f"MODEL_URL={spec.url}")
+          print(f"OLD_SHA={spec.sha256}")
+          PY
+          . /tmp/model_info.sh
+          curl -fsSL "$MODEL_URL" -o /tmp/hey_livekit.onnx
+          NEW_SHA=$(sha256sum /tmp/hey_livekit.onnx | cut -d' ' -f1)
+          if [ "$NEW_SHA" = "$OLD_SHA" ]; then
+            MODEL_NOTE="\`hey_livekit.onnx\` unchanged (sha256 re-verified)."
+          else
+            sed -i "s|${OLD_SHA}|${NEW_SHA}|" "$CONST"
+            MODEL_NOTE=":warning: \`hey_livekit.onnx\` **changed** — sha256 \`${OLD_SHA}\` → \`${NEW_SHA}\`. Verify the model before merging."
+          fi
+          echo "$MODEL_NOTE"
+
           git add "$CONST"
           git commit -m "chore: bump livekit-wakeword ${CURRENT:0:12} → ${LATEST:0:12}"
           git push origin "$BRANCH"
@@ -54,5 +84,5 @@ jobs:
           gh pr create \
             --base main --head "$BRANCH" \
             --title "chore: bump livekit-wakeword ${CURRENT:0:12} → ${LATEST:0:12}" \
-            --body "$(printf '## Upstream update\n\nlivekit/livekit-wakeword: [%s...%s](%s)' "${CURRENT:0:12}" "${LATEST:0:12}" "$COMPARE")" \
+            --body "$(printf '## Upstream update\n\nlivekit/livekit-wakeword: [%s...%s](%s)\n\n%s' "${CURRENT:0:12}" "${LATEST:0:12}" "$COMPARE" "$MODEL_NOTE")" \
             --assignee saya6k

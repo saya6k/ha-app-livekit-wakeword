@@ -74,7 +74,10 @@ Bridge subtleties:
 - `const.KNOWN_MODELS`: name → pinned URL + sha256 + phrase.
   - `hey_livekit` — raw file at a pinned livekit-wakeword commit
     (`_LK_REF`); upstream has **no model registry or release asset**, the
-    repo file is the distribution channel. Bump `_LK_REF` + sha256 together.
+    repo file is the distribution channel. `_LK_REF` and sha256 move
+    together — `upstream-check.yml` re-downloads the model at the new ref
+    and rewrites the pin itself, so a bump PR that leaves sha256 alone is
+    asserting the bytes are unchanged.
   - oWW zoo — `dscripka/openWakeWord` GitHub release v0.5.1 assets
     (alexa, hey_jarvis, hey_mycroft, hey_rhasspy; Apache 2.0). timer/weather
     exist upstream but aren't wake words; deliberately excluded.
@@ -84,6 +87,38 @@ Bridge subtleties:
   automatically, model name = file stem. Expected input `(1, 16, 96)` —
   livekit-trained (any head incl. conv_attention) and oWW classifiers both
   qualify. This is where self-trained (e.g. Korean) models go.
+
+## Reviewing an upstream bump PR
+
+`upstream-check.yml` opens the `upstream/livekit-wakeword-*` PRs with
+`secrets.GITHUB_TOKEN`, and GitHub gates workflow runs raised by that token.
+Here they land as `action_required` (approval pending) rather than not
+running at all, but either way nothing attaches to the PR — `gh pr checks
+<n>` is empty, the required `CI passed` context never appears, and the PR
+cannot merge. A bump PR showing no failures is not evidence that it builds.
+
+Decided 2026-08-12 in `ha-app-zensical` and kept here: stay on
+`GITHUB_TOKEN` and trigger CI by hand rather than maintain a fine-grained
+PAT with an expiry.
+
+To get CI onto a bump PR, cheapest first:
+
+1. Approve the gated run — `gh api -X POST repos/saya6k/ha-app-livekit-wakeword/actions/runs/<id>/approve`,
+   `<id>` from `gh run list --workflow=ci.yml --branch <branch>`. One call,
+   and the checks attach to the PR.
+2. `gh pr close <n> && gh pr reopen <n>` — fires `pull_request: reopened`
+   from your own account. Use when no gated run exists to approve.
+3. Push a commit to the branch — fires `synchronize`. Same result, but your
+   commit ends up in the bump PR.
+
+Then review what CI cannot. The bot only rewrites `_LK_REF` (and sha256 when
+the model changed), so read the upstream compare link in the PR body for
+changes to the frozen frontend or the `(1, 16, 96)` classifier contract — a
+library-only diff cannot affect this bridge, which consumes just the ONNX. A
+:warning: sha256 line in the PR body means the model itself was replaced:
+re-run the end-to-end detection check from *Sanity checks* before merging,
+since a matching pin only proves the download is intact, not that the new
+model still fires on the phrase.
 
 ## Sanity checks before PR
 

@@ -21,7 +21,7 @@ DEFAULT_CUSTOM_DIR = "/share/livekit-wakeword"
 # Pinned upstream sources. livekit-wakeword distributes hey_livekit.onnx inside
 # its repo (no registry/release asset); openWakeWord's zoo lives in its GitHub
 # release. Both runtimes share the byte-identical frozen frontend, so oWW
-# classifiers run unmodified here (verified, see AGENTS.md).
+# classifiers run unmodified here (verified against both frontends).
 _LK_REF = "95448a7559c453fcd87645bd67b247ffb45f85b0"
 _OWW_RELEASE = "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1"
 
